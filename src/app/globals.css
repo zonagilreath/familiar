@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+@theme {
+  --color-primary: #a413ec;
+  --color-primary-light: #b84af0;
+  --color-accent-gold: #d4af37;
+  --color-bg-dark: #0f0813;
+  --color-bg-dark-2: #1c1022;
+  --color-card-dark: #1a1021;
+
+  --font-display: "Inter", sans-serif;
+  --font-fantasy: "Lora", serif;
+}

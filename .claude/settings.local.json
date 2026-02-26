@@ -21,7 +21,13 @@
       "Bash(cd C:/Users/zona/Documents/GitHub/familiar && export PATH=\"/c/Program Files/nodejs:$PATH\" && npx tsx -e \"\nimport { readFileSync, readdirSync, statSync } from 'fs';\nimport { join, relative } from 'path';\n\nconst skip = new Set\\(['07_Spells.md', '12_MonstersA-Z.md', '13_Animals.md']\\);\nconst srdDir = join\\(process.cwd\\(\\), 'srd'\\);\nlet content = '';\nlet totalLines = 0;\n\nfunction walk\\(dir\\) {\n  for \\(const entry of readdirSync\\(dir\\)\\) {\n    const full = join\\(dir, entry\\);\n    const stat = statSync\\(full\\);\n    if \\(stat.isDirectory\\(\\)\\) walk\\(full\\);\n    else if \\(entry.endsWith\\('.md'\\) && !skip.has\\(entry\\)\\) {\n      const text = readFileSync\\(full, 'utf-8'\\);\n      const lines = text.split\\('\\\\n'\\).length;\n      totalLines += lines;\n      content += text;\n      console.log\\(relative\\(srdDir, full\\) + ': ' + lines + ' lines, ' + text.length + ' chars'\\);\n    }\n  }\n}\nwalk\\(srdDir\\);\nconsole.log\\('\\\\nTotal: ' + totalLines + ' lines, ' + content.length + ' chars'\\);\nconsole.log\\('Estimated tokens: ~' + Math.round\\(content.length / 4\\)\\);\n\" 2>&1)",
       "Bash(cd C:/Users/zona/Documents/GitHub/familiar && export PATH=\"/c/Program Files/nodejs:$PATH\" && npx tsx test-size.ts 2>&1)",
       "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\" && curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d \"{\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"What are the full stat blocks for a Wight and a Mummy? I want to compare them for an encounter.\\\\\"}]}\" 2>&1)",
-      "Bash(cd C:/Users/zona/Documents/GitHub/familiar && export PATH=\"/c/Program Files/nodejs:$PATH\" && npm test 2>&1)"
+      "Bash(cd C:/Users/zona/Documents/GitHub/familiar && export PATH=\"/c/Program Files/nodejs:$PATH\" && npm test 2>&1)",
+      "Bash(cd \"C:/Users/zona/Documents/GitHub/familiar\" && npm test 2>&1)",
+      "Bash(head:*)",
+      "Bash(cd:*)",
+      "Bash(claude mcp:*)",
+      "mcp__stitch__get_screen",
+      "Bash(curl:*)"
     ]
   }
 }

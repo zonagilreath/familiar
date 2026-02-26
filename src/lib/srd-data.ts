@@ -203,11 +203,11 @@ function parseSpellFile(filePath: string): Spell[] {
 const srdDir = join(process.cwd(), "srd");
 
 export const creatures: Creature[] = [
-  ...parseCreatureFile(join(srdDir, "12_MonstersA-Z.md"), "monster"),
-  ...parseCreatureFile(join(srdDir, "13_Animals.md"), "animal"),
+  ...parseCreatureFile(join(srdDir, "MonstersA-Z.md"), "monster"),
+  ...parseCreatureFile(join(srdDir, "Animals.md"), "animal"),
 ];
 
-export const spells: Spell[] = parseSpellFile(join(srdDir, "07_Spells.md"));
+export const spells: Spell[] = parseSpellFile(join(srdDir, "Spells.md"));
 
 // Lookup maps (case-insensitive)
 export const creaturesByName = new Map(
