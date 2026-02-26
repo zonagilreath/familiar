@@ -1,14 +1,14 @@
+import {
+  getCreature,
+  getSpell,
+  searchCreatures,
+  searchSpells,
+} from "@/lib/srd-lookup";
 import { GoogleGenAI, Type, type Tool } from "@google/genai";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join, relative } from "path";
-import {
-  searchCreatures,
-  getCreature,
-  searchSpells,
-  getSpell,
-} from "@/lib/srd-lookup";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
 
 const MODEL = "gemini-2.5-flash";
 
@@ -288,10 +288,66 @@ interface ChatMessage {
   content: string;
 }
 
+// --- Rate Limiting ---
+
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 20; // requests per window per IP
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT_MAX;
+}
+
+// Clean up stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, 300_000);
+
+// --- Request Limits ---
+
+const MAX_MESSAGES = 50;
+const MAX_MESSAGE_LENGTH = 4000;
+
 // --- Route Handler ---
 
 export async function POST(request: Request) {
   try {
+    // Origin check — reject requests not from our own origin
+    const origin = request.headers.get("origin");
+    const referer = request.headers.get("referer");
+    if (process.env.NODE_ENV === "production") {
+      const allowedOrigin = process.env.ALLOWED_ORIGIN;
+      if (allowedOrigin && origin && origin !== allowedOrigin) {
+        return Response.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+    // In dev, also accept no origin (e.g. curl/test scripts)
+    const isDev = process.env.NODE_ENV !== "production";
+    if (!isDev && !origin && !referer) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limiting by IP
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ip = forwarded?.split(",")[0]?.trim() || "unknown";
+    if (isRateLimited(ip)) {
+      return Response.json(
+        { error: "Too many requests. Please wait a moment." },
+        { status: 429 }
+      );
+    }
+
     const { messages } = (await request.json()) as {
       messages: ChatMessage[];
     };
@@ -301,6 +357,22 @@ export async function POST(request: Request) {
         { error: "messages array is required" },
         { status: 400 }
       );
+    }
+
+    // Request validation — cap size to prevent token abuse
+    if (messages.length > MAX_MESSAGES) {
+      return Response.json(
+        { error: `Too many messages (max ${MAX_MESSAGES})` },
+        { status: 400 }
+      );
+    }
+    for (const msg of messages) {
+      if (typeof msg.content !== "string" || msg.content.length > MAX_MESSAGE_LENGTH) {
+        return Response.json(
+          { error: `Message too long (max ${MAX_MESSAGE_LENGTH} chars)` },
+          { status: 400 }
+        );
+      }
     }
 
     // Map frontend format → Gemini format
@@ -345,10 +417,19 @@ export async function POST(request: Request) {
             let hasText = false;
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const functionCalls: any[] = [];
+            let chunkCount = 0;
+            let lastFinishReason: string | undefined;
 
             for await (const chunk of stream) {
+              chunkCount++;
+              // Track finish reason for debugging
+              const candidate = chunk.candidates?.[0];
+              if (candidate?.finishReason) {
+                lastFinishReason = candidate.finishReason as string;
+              }
+
               // Check for function calls in parts
-              const parts = chunk.candidates?.[0]?.content?.parts;
+              const parts = candidate?.content?.parts;
               if (parts) {
                 for (const part of parts) {
                   if (part.functionCall) {
@@ -373,7 +454,7 @@ export async function POST(request: Request) {
             if (!isToolCall) {
               if (!hasText) {
                 console.warn(
-                  `[Familiar] Round ${round}: no tool calls and no text — empty response`
+                  `[Familiar] Round ${round}: empty response (${chunkCount} chunks, finishReason=${lastFinishReason})`
                 );
               }
               break;

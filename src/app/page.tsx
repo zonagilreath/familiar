@@ -1,22 +1,85 @@
 "use client";
 
 import { useState, useRef, useEffect, FormEvent } from "react";
+import Markdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
+const LOADING_VERBS = [
+  "Consulting",
+  "Summoning",
+  "Interrogating",
+  "Polishing",
+  "Sharpening",
+  "Bargaining with",
+  "Rousing",
+  "Feeding",
+  "Waking",
+  "Bribing",
+  "Befriending",
+  "Recruiting",
+  "Distracting",
+  "Petting",
+  "Flattering",
+  "Scolding",
+  "Negotiating with",
+  "Pacifying",
+  "Outwitting",
+  "Dusting off",
+];
+
+const LOADING_NOUNS = [
+  "goblins",
+  "the oracle",
+  "dire wolves",
+  "ancient tomes",
+  "enchanted swords",
+  "a sleeping dragon",
+  "tavern regulars",
+  "the dungeon keeper",
+  "spectral librarians",
+  "mimics",
+  "a cranky lich",
+  "owlbears",
+  "a wandering bard",
+  "the war council",
+  "arcane scrolls",
+  "a suspicious chest",
+  "kobold scouts",
+  "the guild master",
+  "a sentient door",
+  "the bones",
+];
+
+function randomLoadingPhrase(): string {
+  const verb = LOADING_VERBS[Math.floor(Math.random() * LOADING_VERBS.length)];
+  const noun = LOADING_NOUNS[Math.floor(Math.random() * LOADING_NOUNS.length)];
+  return `${verb} ${noun}`;
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingPhrase, setLoadingPhrase] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    setLoadingPhrase(randomLoadingPhrase());
+    const interval = setInterval(() => {
+      setLoadingPhrase(randomLoadingPhrase());
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -33,7 +96,7 @@ export default function Home() {
 
     const userMessage: Message = { role: "user", content: trimmed };
     const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    setMessages([...newMessages, { role: "assistant", content: "" }]);
     setInput("");
     setIsLoading(true);
 
@@ -54,8 +117,6 @@ export default function Home() {
 
       const decoder = new TextDecoder();
       let assistantContent = "";
-
-      setMessages([...newMessages, { role: "assistant", content: "" }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -155,9 +216,38 @@ export default function Home() {
                   : "bg-stone-800 text-stone-200"
               }`}
             >
-              <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                {msg.content}
-                {msg.role === "assistant" && isLoading && i === messages.length - 1 && (
+              <div className="text-sm leading-relaxed">
+                {msg.role === "assistant" && !msg.content && isLoading && i === messages.length - 1 ? (
+                  <span className="text-stone-500 italic">{loadingPhrase}...</span>
+                ) : msg.role === "assistant" ? (
+                  <Markdown
+                    components={{
+                      h1: (props) => <h1 className="text-lg font-bold text-amber-500 mt-4 mb-2 first:mt-0" {...props} />,
+                      h2: (props) => <h2 className="text-base font-bold text-amber-500 mt-4 mb-2 first:mt-0" {...props} />,
+                      h3: (props) => <h3 className="text-sm font-bold text-amber-400 mt-3 mb-1 first:mt-0" {...props} />,
+                      h4: (props) => <h4 className="text-sm font-semibold text-amber-400 mt-2 mb-1 first:mt-0" {...props} />,
+                      p: (props) => <p className="mb-2 last:mb-0" {...props} />,
+                      ul: (props) => <ul className="list-disc list-outside ml-4 mb-2 space-y-1" {...props} />,
+                      ol: (props) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-1" {...props} />,
+                      li: (props) => <li className="pl-1" {...props} />,
+                      strong: (props) => <strong className="font-semibold text-stone-100" {...props} />,
+                      em: (props) => <em className="text-stone-400" {...props} />,
+                      code: (props) => <code className="bg-stone-900 px-1.5 py-0.5 rounded text-amber-400 text-xs" {...props} />,
+                      pre: (props) => <pre className="bg-stone-900 rounded-lg p-3 my-2 overflow-x-auto text-xs" {...props} />,
+                      blockquote: (props) => <blockquote className="border-l-2 border-amber-600 pl-3 my-2 text-stone-400 italic" {...props} />,
+                      hr: () => <hr className="border-stone-700 my-3" />,
+                      table: (props) => <div className="overflow-x-auto my-2"><table className="text-xs border-collapse w-full" {...props} /></div>,
+                      thead: (props) => <thead className="border-b border-stone-600" {...props} />,
+                      th: (props) => <th className="text-left px-2 py-1 font-semibold text-amber-400" {...props} />,
+                      td: (props) => <td className="px-2 py-1 border-t border-stone-700/50" {...props} />,
+                    }}
+                  >
+                    {msg.content}
+                  </Markdown>
+                ) : (
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                )}
+                {msg.role === "assistant" && msg.content && isLoading && i === messages.length - 1 && (
                   <span className="inline-block w-1.5 h-4 ml-0.5 bg-amber-500 animate-pulse" />
                 )}
               </div>

@@ -11,7 +11,7 @@ AI-powered D&D 5e encounter assistant for dungeon masters. Chat with an AI that 
 
 2. Get a free API key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and add it to `.env.local`:
    ```
-   GEMINI_API_KEY=your-key-here
+   GOOGLE_GENERATIVE_AI_API_KEY=your-key-here
    ```
 
 3. Run the dev server:
