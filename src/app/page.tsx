@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import EncounterForm from "@/components/EncounterForm";
 import EncounterSheet from "@/components/EncounterSheet";
-import LoadingScreen from "@/components/LoadingScreen";
+import LoadingScreen, { randomRetryPhrase } from "@/components/LoadingScreen";
 import type { Encounter, EncounterKind, EncounterRequest } from "@/types/encounter";
 import { DEMO_ENCOUNTERS, DEMO_KINDS } from "@/lib/demo-encounters";
 
@@ -59,7 +59,7 @@ function randomLoadingPhrase(): string {
   return `${verb} ${noun}`;
 }
 
-type View = "form" | "loading" | "success" | "error" | "sheet" | "demo";
+type View = "form" | "loading" | "retrying" | "success" | "error" | "sheet" | "demo";
 
 export default function Home() {
   const [view, setView] = useState<View>("form");
@@ -68,6 +68,8 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState("");
   const [lastRequest, setLastRequest] = useState<EncounterRequest | null>(null);
   const [demoKind, setDemoKind] = useState<EncounterKind>("combat");
+  const [variety, setVariety] = useState(0);
+  const [retryPhrase, setRetryPhrase] = useState("");
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cycle loading phrases
@@ -87,46 +89,70 @@ export default function Home() {
     };
   }, []);
 
-  const generate = useCallback(async (req: EncounterRequest) => {
+  const generate = useCallback(async (req: EncounterRequest, reqVariety?: number) => {
     setLastRequest(req);
+    const v = reqVariety ?? 0;
+    setVariety(v);
     setView("loading");
     setErrorMessage("");
 
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req),
-      });
+    const MAX_RETRIES = 2;
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || `Request failed (${res.status})`);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...req, variety: v }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || `Request failed (${res.status})`);
+        }
+
+        const data: Encounter = await res.json();
+        setEncounter(data);
+
+        // Brief success screen before showing the sheet
+        setView("success");
+        successTimer.current = setTimeout(() => {
+          setView("sheet");
+        }, 1500);
+        return;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Something went wrong";
+
+        // Don't retry on client errors (4xx) — only transient/server failures
+        if (message.includes("Forbidden") || message.includes("required")) {
+          setErrorMessage(message);
+          setView("error");
+          return;
+        }
+
+        if (attempt < MAX_RETRIES) {
+          setRetryPhrase(randomRetryPhrase());
+          setView("retrying");
+          // Wait before retrying (2s, then 3s)
+          await new Promise((r) => setTimeout(r, (attempt + 2) * 1000));
+          setView("loading");
+        } else {
+          setErrorMessage(message);
+          setView("error");
+        }
       }
-
-      const data: Encounter = await res.json();
-      setEncounter(data);
-
-      // Brief success screen before showing the sheet
-      setView("success");
-      successTimer.current = setTimeout(() => {
-        setView("sheet");
-      }, 1500);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong";
-      setErrorMessage(message);
-      setView("error");
     }
   }, []);
 
   function handleBack() {
+    setVariety(0);
     setView("form");
   }
 
   function handleTryAgain() {
     if (lastRequest) {
-      generate(lastRequest);
+      generate(lastRequest, variety);
     } else {
       setView("form");
     }
@@ -134,7 +160,15 @@ export default function Home() {
 
   function handleRegenerate() {
     if (lastRequest) {
-      generate(lastRequest);
+      const next = Math.min(variety + 1, 5);
+      generate(lastRequest, next);
+    }
+  }
+
+  function handleWeirder() {
+    if (lastRequest) {
+      const next = Math.min(variety + 2, 5);
+      generate(lastRequest, next);
     }
   }
 
@@ -164,11 +198,12 @@ export default function Home() {
         </>
       )}
 
-      {/* Loading / Success / Error overlays */}
-      {(view === "loading" || view === "success" || view === "error") && (
+      {/* Loading / Retrying / Success / Error overlays */}
+      {(view === "loading" || view === "retrying" || view === "success" || view === "error") && (
         <LoadingScreen
           state={view}
           loadingPhrase={loadingPhrase}
+          retryPhrase={retryPhrase}
           errorMessage={errorMessage}
           onTryAgain={handleTryAgain}
           onBack={handleBack}
@@ -180,8 +215,10 @@ export default function Home() {
         <div className="h-screen">
           <EncounterSheet
             encounter={encounter}
+            variety={variety}
             onBack={handleBack}
             onRegenerate={handleRegenerate}
+            onWeirder={handleWeirder}
           />
         </div>
       )}
@@ -221,8 +258,10 @@ export default function Home() {
           <div className="flex-1 min-h-0">
             <EncounterSheet
               encounter={DEMO_ENCOUNTERS[demoKind]}
+              variety={0}
               onBack={handleBack}
               onRegenerate={() => {}}
+              onWeirder={() => {}}
             />
           </div>
         </div>

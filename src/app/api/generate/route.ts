@@ -136,6 +136,39 @@ You MUST respond with valid JSON matching this structure. No markdown, no prose 
 
 IMPORTANT: Only discuss tabletop RPG topics. Decline off-topic requests.`;
 
+function getVarietyInstruction(variety: number): string {
+  if (variety <= 0) return "";
+
+  const tiers: string[] = [];
+
+  // Tier 1
+  tiers.push(
+    "Avoid the most obvious creature choices and encounter setups for these parameters. Prefer less commonly used SRD options over the go-to picks."
+  );
+  if (variety >= 2) {
+    tiers.push(
+      "Try unexpected combinations — creatures in atypical tactical roles, unusual pairings that don't normally appear together, environments used in surprising ways."
+    );
+  }
+  if (variety >= 3) {
+    tiers.push(
+      "Mix creature origins and environments — pull from different monster types or ecosystems. Include at least one element that would make a DM say \"I wouldn't have thought of that.\""
+    );
+  }
+  if (variety >= 4) {
+    tiers.push(
+      "Subvert expectations for this encounter type — hostile NPCs who aren't straightforwardly evil, traps with novel mechanisms, social encounters with unusual power dynamics. Challenge the DM's assumptions."
+    );
+  }
+  if (variety >= 5) {
+    tiers.push(
+      "Go genuinely weird — break genre assumptions, combine encounter elements in novel ways, introduce mechanics or scenarios that feel fresh and surprising. Stay mechanically sound and playable, but push creative boundaries hard."
+    );
+  }
+
+  return "\nCreative variety instructions:\n" + tiers.join("\n");
+}
+
 function buildPrompt(req: EncounterRequest): string {
   const parts: string[] = [];
 
@@ -164,6 +197,11 @@ function buildPrompt(req: EncounterRequest): string {
 
   if (req.pacing) {
     parts.push(`Pacing: ${req.pacing}`);
+  }
+
+  const varietyInstruction = getVarietyInstruction(req.variety ?? 0);
+  if (varietyInstruction) {
+    parts.push(varietyInstruction);
   }
 
   if (req.vibe.trim()) {
@@ -225,6 +263,9 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as EncounterRequest;
+
+    // Clamp variety to [0, 5]
+    body.variety = Math.max(0, Math.min(5, Math.floor(body.variety ?? 0)));
 
     // Basic validation
     if (

@@ -4,8 +4,10 @@ import type { Encounter, SpotlightEntry } from "@/types/encounter";
 
 interface EncounterSheetProps {
   encounter: Encounter;
+  variety: number;
   onBack: () => void;
   onRegenerate: () => void;
+  onWeirder: () => void;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -619,8 +621,10 @@ function TypePayload({ encounter }: { encounter: Encounter }) {
 
 export default function EncounterSheet({
   encounter,
+  variety,
   onBack,
   onRegenerate,
+  onWeirder,
 }: EncounterSheetProps) {
   return (
     <div className="flex flex-col h-full">
@@ -755,6 +759,29 @@ export default function EncounterSheet({
               </span>
               <span>Regenerate</span>
             </button>
+            {variety < 5 && (
+              <button
+                onClick={onWeirder}
+                className="flex items-center gap-2 px-5 py-3 bg-accent-gold/10 hover:bg-accent-gold/20 text-accent-gold font-black rounded-lg border border-accent-gold/30 transition-all active:scale-95 uppercase tracking-widest text-sm"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  casino
+                </span>
+                <span className="hidden sm:inline">Shake It Up</span>
+              </button>
+            )}
+            {variety > 0 && (
+              <div className="flex items-center gap-1 px-2" title={`Variety ${variety}/5`}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`block w-1.5 h-1.5 rounded-full transition-colors ${
+                      i < variety ? "bg-accent-gold" : "bg-white/15"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
             <div className="h-8 w-px bg-white/10 mx-1" />
             <button
               onClick={() => {

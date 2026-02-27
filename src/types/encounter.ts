@@ -17,6 +17,8 @@ export interface EncounterRequest {
   party_composition: PartyMember[];
   vibe: string;
   pacing?: "quick" | "standard" | "epic";
+  /** 0-5 variety scale: 0=standard, 5=wildly creative */
+  variety?: number;
 }
 
 // ---------------------------------------------------------------------------

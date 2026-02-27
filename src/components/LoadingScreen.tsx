@@ -37,17 +37,38 @@ function D20Icon({ className }: { className?: string }) {
   );
 }
 
+const RETRY_PHRASES = [
+  "The scribes got eaten by an aboleth — sending more",
+  "A gelatinous cube dissolved the first draft",
+  "The courier took an arrow to the knee",
+  "Turns out the map was a mimic",
+  "The wizard sneezed mid-incantation — restarting the ritual",
+  "A beholder blinked and disintegrated our notes",
+  "The tavern bard won't stop and we can't concentrate",
+  "Somebody fed the owlbear our encounter plans",
+  "The ink turned out to be invisible — rewriting",
+  "A rogue stole the encounter on the way here",
+];
+
+function randomRetryPhrase(): string {
+  return RETRY_PHRASES[Math.floor(Math.random() * RETRY_PHRASES.length)];
+}
+
 interface LoadingScreenProps {
-  state: "loading" | "success" | "error";
+  state: "loading" | "success" | "error" | "retrying";
   loadingPhrase: string;
+  retryPhrase?: string;
   errorMessage?: string;
   onTryAgain?: () => void;
   onBack?: () => void;
 }
 
+export { randomRetryPhrase };
+
 export default function LoadingScreen({
   state,
   loadingPhrase,
+  retryPhrase,
   errorMessage,
   onTryAgain,
   onBack,
@@ -65,6 +86,19 @@ export default function LoadingScreen({
             {/* Progress bar */}
             <div className="w-48 h-1 bg-primary/20 rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full animate-[loading-bar_2s_ease-in-out_infinite]" />
+            </div>
+          </>
+        )}
+
+        {state === "retrying" && (
+          <>
+            <D20Icon className="w-24 h-24 text-accent-gold animate-spin" />
+            <p className="text-accent-gold text-lg font-bold italic tracking-wide text-center max-w-xs">
+              {retryPhrase || "Something went wrong — trying again"}
+            </p>
+            {/* Progress bar */}
+            <div className="w-48 h-1 bg-accent-gold/20 rounded-full overflow-hidden">
+              <div className="h-full bg-accent-gold rounded-full animate-[loading-bar_2s_ease-in-out_infinite]" />
             </div>
           </>
         )}
@@ -116,7 +150,7 @@ export default function LoadingScreen({
 
       {/* Bottom flavor text */}
       <div className="absolute bottom-8 text-center">
-        {state === "loading" && (
+        {(state === "loading" || state === "retrying") && (
           <p className="text-xs text-slate-600 uppercase tracking-[0.2em]">
             The dice are <span className="font-bold text-slate-500">rolling...</span>
           </p>
