@@ -1,5 +1,23 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "ALLOW-FROM https://zonadostuff.vercel.app https://zonadostuff-git-portfolio-rebuild-2026-zonafolio.vercel.app",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self' https://zonadostuff.vercel.app https://zonadostuff-git-portfolio-rebuild-2026-zonafolio.vercel.app",
+          },
+        ],
+      },
+    ];
+  },
+};
 
 export default nextConfig;
