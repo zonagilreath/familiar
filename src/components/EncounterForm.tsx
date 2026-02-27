@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import type { EncounterKind, EncounterRequest, PartyMember } from "@/types/encounter";
+import { useState } from "react";
 
 const ENCOUNTER_TYPES: { kind: EncounterKind; label: string; icon: string }[] = [
   { kind: "combat", label: "Combat", icon: "swords" },
   { kind: "puzzle", label: "Puzzle", icon: "extension" },
   { kind: "social", label: "Social", icon: "forum" },
-  { kind: "exploration", label: "Exploration", icon: "explore" },
   { kind: "trap", label: "Trap", icon: "warning" },
-  { kind: "investigation", label: "Investigation", icon: "search" },
-  { kind: "chase", label: "Chase", icon: "directions_run" },
-  { kind: "hazard", label: "Hazard", icon: "thunderstorm" },
-  { kind: "skill_challenge", label: "Skill Challenge", icon: "fitness_center" },
+  // { kind: "exploration", label: "Exploration", icon: "explore" },
+  // { kind: "investigation", label: "Investigation", icon: "search" },
+  // { kind: "chase", label: "Chase", icon: "directions_run" },
+  // { kind: "hazard", label: "Hazard", icon: "thunderstorm" },
+  // { kind: "skill_challenge", label: "Skill Challenge", icon: "fitness_center" },
 ];
 
 const ENVIRONMENTS = [
@@ -47,25 +47,19 @@ const DIFFICULTY_LABELS = ["Trivial", "Easy", "Medium", "Hard", "Deadly"];
 
 interface EncounterFormProps {
   onGenerate: (req: EncounterRequest) => void;
-  isLoading: boolean;
-  loadingPhrase: string;
 }
 
 export default function EncounterForm({
   onGenerate,
-  isLoading,
-  loadingPhrase,
 }: EncounterFormProps) {
   const [encounterType, setEncounterType] = useState<EncounterKind | undefined>();
   const [partySize, setPartySize] = useState(4);
   const [averageLevel, setAverageLevel] = useState(5);
   const [difficulty, setDifficulty] = useState(3);
-  const [environment, setEnvironment] = useState("Dungeon");
+  const [environment, setEnvironment] = useState("");
   const [party, setParty] = useState<PartyMember[]>([]);
   const [vibe, setVibe] = useState("");
   const [pacing, setPacing] = useState<"quick" | "standard" | "epic">("standard");
-  const [lootIntensity, setLootIntensity] = useState<"sparse" | "standard" | "abundant" | "hoard">("standard");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showClassPicker, setShowClassPicker] = useState(false);
 
   function addClass(className: string) {
@@ -96,7 +90,6 @@ export default function EncounterForm({
       party_composition: party,
       vibe,
       pacing,
-      loot_intensity: lootIntensity,
     });
   }
 
@@ -104,10 +97,10 @@ export default function EncounterForm({
     <main className="flex-1 max-w-7xl mx-auto w-full p-6 lg:p-12">
       <div className="mb-10">
         <h1 className="text-4xl lg:text-5xl font-black font-fantasy text-slate-100 mb-2">
-          Encounter Generator
+          (un)Familiar Encounters
         </h1>
         <p className="text-slate-400 text-lg">
-          Use controls, text, or both. Everything is optional.
+          Use controls, text, or both.
         </p>
       </div>
 
@@ -120,14 +113,14 @@ export default function EncounterForm({
               <span className="material-symbols-outlined">auto_awesome</span>
               Encounter Type
             </h2>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {ENCOUNTER_TYPES.map((t) => (
                 <button
                   key={t.kind}
                   onClick={() =>
                     setEncounterType(encounterType === t.kind ? undefined : t.kind)
                   }
-                  className={`flex flex-col items-center justify-center p-3 aspect-square rounded-xl border-2 transition-all active:scale-95 ${
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all active:scale-95 ${
                     encounterType === t.kind
                       ? "border-primary bg-primary/20 ring-1 ring-primary"
                       : "border-primary/20 bg-primary/5 hover:border-primary/50"
@@ -235,8 +228,9 @@ export default function EncounterForm({
                 <select
                   value={environment}
                   onChange={(e) => setEnvironment(e.target.value)}
-                  className="w-full bg-primary/10 border border-primary/20 rounded-lg py-3 px-4 focus:ring-primary focus:border-primary text-slate-100"
+                  className="w-full bg-bg-dark border border-primary/20 rounded-lg py-3 px-4 focus:ring-primary focus:border-primary text-slate-100 [&>option]:bg-bg-dark [&>option]:text-slate-100"
                 >
+                  <option value="">Any</option>
                   {ENVIRONMENTS.map((env) => (
                     <option key={env} value={env}>
                       {env}
@@ -244,6 +238,33 @@ export default function EncounterForm({
                   ))}
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Pacing */}
+          <div>
+            <label className="block text-sm font-bold text-slate-400 mb-3 uppercase tracking-wider">
+              Pacing
+            </label>
+            <div className="flex gap-2">
+              {([
+                { value: "quick", label: "Quick", icon: "bolt" },
+                { value: "standard", label: "Standard", icon: "pace" },
+                { value: "epic", label: "Epic / Multi-stage", icon: "castle" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setPacing(opt.value)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-bold transition-all ${
+                    pacing === opt.value
+                      ? "border-primary bg-primary/20 text-white"
+                      : "border-primary/20 bg-primary/5 text-slate-400 hover:border-primary/40"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-base">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -294,70 +315,6 @@ export default function EncounterForm({
             </div>
           </section>
 
-          {/* Advanced options */}
-          <div className="bg-primary/5 rounded-xl border border-primary/20 overflow-hidden">
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center justify-between w-full p-4 hover:bg-primary/10 transition-colors"
-            >
-              <span className="font-bold text-slate-200 flex items-center gap-2">
-                <span className="material-symbols-outlined">settings</span>
-                Advanced Options
-              </span>
-              <span
-                className={`material-symbols-outlined transition-transform ${showAdvanced ? "rotate-180" : ""}`}
-              >
-                expand_more
-              </span>
-            </button>
-            {showAdvanced && (
-              <div className="p-6 border-t border-primary/20 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">
-                      Length / Pacing
-                    </label>
-                    <select
-                      value={pacing}
-                      onChange={(e) =>
-                        setPacing(
-                          e.target.value as "quick" | "standard" | "epic"
-                        )
-                      }
-                      className="w-full bg-bg-dark border border-primary/20 rounded-lg py-2 px-3 text-sm text-slate-100"
-                    >
-                      <option value="quick">Quick Encounter</option>
-                      <option value="standard">Standard</option>
-                      <option value="epic">Epic / Multi-stage</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">
-                      Loot Intensity
-                    </label>
-                    <select
-                      value={lootIntensity}
-                      onChange={(e) =>
-                        setLootIntensity(
-                          e.target.value as
-                            | "sparse"
-                            | "standard"
-                            | "abundant"
-                            | "hoard"
-                        )
-                      }
-                      className="w-full bg-bg-dark border border-primary/20 rounded-lg py-2 px-3 text-sm text-slate-100"
-                    >
-                      <option value="sparse">Sparse</option>
-                      <option value="standard">Standard</option>
-                      <option value="abundant">Abundant</option>
-                      <option value="hoard">Hoard Potential</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Right: Vibe + action */}
@@ -365,7 +322,7 @@ export default function EncounterForm({
           <div className="flex-1 flex flex-col bg-primary/5 rounded-2xl border border-primary/10 p-8">
             <h2 className="text-xl font-bold font-fantasy text-accent-gold mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined">history_edu</span>
-              The Vibe
+              Make it Yours
             </h2>
             <p className="text-sm text-slate-400 mb-4 italic">
               Optional: Describe the atmosphere, specific monsters, or narrative
@@ -382,21 +339,12 @@ export default function EncounterForm({
           <div className="space-y-4">
             <button
               onClick={handleSubmit}
-              disabled={isLoading}
-              className="w-full py-6 rounded-2xl bg-primary text-white font-black text-xl font-fantasy tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:hover:scale-100"
+              className="w-full py-6 rounded-2xl bg-primary text-white font-black text-xl font-fantasy tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
             >
-              {isLoading ? (
-                <span className="text-base font-display italic tracking-normal font-medium">
-                  {loadingPhrase}...
-                </span>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-3xl">
-                    auto_fix_high
-                  </span>
-                  GENERATE ENCOUNTER
-                </>
-              )}
+              <span className="material-symbols-outlined text-3xl">
+                auto_fix_high
+              </span>
+              GENERATE ENCOUNTER
             </button>
           </div>
         </div>

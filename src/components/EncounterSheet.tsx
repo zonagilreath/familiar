@@ -65,7 +65,7 @@ function CombatPayload({ payload }: { payload: Encounter & { kind: "combat" } })
 
   return (
     <>
-      {/* Combat Roster */}
+      {/* Combat Roster — primary */}
       <Section icon="groups" title="Combat Roster">
         <div className="bg-card-dark border border-white/10 rounded-xl overflow-hidden overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -109,8 +109,12 @@ function CombatPayload({ payload }: { payload: Encounter & { kind: "combat" } })
             </tbody>
           </table>
         </div>
-        {xp_budget && (
-          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+      </Section>
+
+      {/* XP / Difficulty Assessment */}
+      {xp_budget && (
+        <Section icon="casino" title="Difficulty Assessment">
+          <div className="flex flex-wrap gap-4 text-sm">
             <div className="px-3 py-1.5 bg-white/5 rounded border border-white/10 text-slate-300">
               <span className="text-primary font-bold">XP:</span>{" "}
               {xp_budget.total_xp.toLocaleString()} total /{" "}
@@ -122,10 +126,10 @@ function CombatPayload({ payload }: { payload: Encounter & { kind: "combat" } })
               {xp_budget.party_summary}
             </div>
           </div>
-        )}
-      </Section>
+        </Section>
+      )}
 
-      {/* Terrain */}
+      {/* Terrain — auxiliary */}
       {terrain && terrain.length > 0 && (
         <Section icon="terrain" title="Terrain">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -149,7 +153,7 @@ function CombatPayload({ payload }: { payload: Encounter & { kind: "combat" } })
         </Section>
       )}
 
-      {/* Tactics */}
+      {/* Tactics — auxiliary */}
       {tactics && tactics.length > 0 && (
         <Section icon="strategy" title="Tactics">
           <ul className="space-y-2">
@@ -165,7 +169,7 @@ function CombatPayload({ payload }: { payload: Encounter & { kind: "combat" } })
         </Section>
       )}
 
-      {/* Adjustments */}
+      {/* Adjustments — auxiliary */}
       {adjustments && adjustments.length > 0 && (
         <Section icon="tune" title="Adjustments">
           <ul className="space-y-2">
@@ -619,7 +623,7 @@ export default function EncounterSheet({
   onRegenerate,
 }: EncounterSheetProps) {
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <header className="flex items-center justify-between border-b border-primary/20 px-6 py-4 bg-bg-dark/80 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3">
@@ -637,25 +641,17 @@ export default function EncounterSheet({
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6 lg:px-8 max-w-4xl mx-auto w-full">
-        {/* Execution Summary */}
+        {/* Execution Summary: Goal → Stakes → Setup */}
         <section className="bg-card-dark border border-primary/30 rounded-xl overflow-hidden shadow-2xl mb-8">
-          <div className="p-5 border-b border-primary/20 bg-primary/5 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">
-              description
-            </span>
-            <h2 className="text-white font-bold text-lg">Execution Summary</h2>
+          <div className="px-6 py-5 border-b border-primary/20 bg-primary/5">
+            <h3 className="text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-1">
+              The Goal
+            </h3>
+            <p className="text-lg text-white font-medium leading-snug italic">
+              &ldquo;{encounter.goal}&rdquo;
+            </p>
           </div>
           <div className="p-6 space-y-8">
-            {/* Goal */}
-            <div>
-              <h3 className="text-primary text-xs font-bold uppercase tracking-[0.2em] mb-2">
-                The Goal
-              </h3>
-              <p className="text-xl text-white font-medium leading-relaxed italic">
-                &ldquo;{encounter.goal}&rdquo;
-              </p>
-            </div>
-
             {/* Stakes */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-emerald-500/5 border-l-4 border-emerald-500 p-4 rounded-r">
@@ -675,33 +671,6 @@ export default function EncounterSheet({
                 </p>
               </div>
             </div>
-
-            {/* Spotlight */}
-            {encounter.spotlight && encounter.spotlight.length > 0 && (
-              <div>
-                <h3 className="text-primary text-xs font-bold uppercase tracking-[0.2em] mb-4">
-                  PC Spotlight Hooks
-                </h3>
-                <div className="grid grid-cols-1 gap-3">
-                  {encounter.spotlight.map((s, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-4 p-3 rounded bg-white/5 border border-white/10"
-                    >
-                      <span className="material-symbols-outlined text-primary mt-0.5">
-                        {getSpotlightIcon(s)}
-                      </span>
-                      <p className="text-slate-300 text-sm">
-                        <strong className="text-white">
-                          {getSpotlightLabel(s)}:
-                        </strong>{" "}
-                        {s.hook}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Setup */}
             {encounter.setup && (
@@ -738,6 +707,30 @@ export default function EncounterSheet({
 
         {/* Type-specific payload */}
         <TypePayload encounter={encounter} />
+
+        {/* Spotlight hooks — auxiliary */}
+        {encounter.spotlight && encounter.spotlight.length > 0 && (
+          <Section icon="local_fire_department" title="PC Spotlight Hooks">
+            <div className="grid grid-cols-1 gap-3">
+              {encounter.spotlight.map((s, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-4 p-3 rounded bg-white/5 border border-white/10"
+                >
+                  <span className="material-symbols-outlined text-primary mt-0.5">
+                    {getSpotlightIcon(s)}
+                  </span>
+                  <p className="text-slate-300 text-sm">
+                    <strong className="text-white">
+                      {getSpotlightLabel(s)}:
+                    </strong>{" "}
+                    {s.hook}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
       </main>
 
       {/* Footer */}

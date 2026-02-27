@@ -1,11 +1,11 @@
 import {
   ai,
-  MODEL,
-  srdContent,
-  toolDeclarations,
   executeTool,
   getOrCreateCache,
   isRateLimited,
+  MODEL,
+  srdContent,
+  toolDeclarations,
 } from "@/lib/gemini";
 
 const SYSTEM_PROMPT = `You are Familiar, an expert D&D 5e encounter designer for dungeon masters. You produce structured, actionable encounter specs — not prose, not storytelling. The DM and their players tell the story; you give them the tools to do it.
@@ -28,7 +28,6 @@ ${srdContent}
 
 ## How to Respond
 
-- If party composition (level, size, classes) is missing, ask for it before designing
 - If the request is a rules question, answer it directly with SRD references
 - If the request is for an encounter, produce structured, actionable output
 

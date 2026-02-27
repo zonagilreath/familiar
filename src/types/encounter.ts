@@ -17,7 +17,6 @@ export interface EncounterRequest {
   party_composition: PartyMember[];
   vibe: string;
   pacing?: "quick" | "standard" | "epic";
-  loot_intensity?: "sparse" | "standard" | "abundant" | "hoard";
 }
 
 // ---------------------------------------------------------------------------

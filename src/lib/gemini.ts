@@ -302,14 +302,38 @@ export async function generateWithTools(
   const MAX_TOOL_ROUNDS = 10;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: currentContents,
-      config: baseConfig,
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: MODEL,
+        contents: currentContents,
+        config: baseConfig,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Familiar] Generate round ${round}: API call failed:`, msg);
+      throw new Error(`Gemini API error: ${msg}`);
+    }
 
-    const parts = response.candidates?.[0]?.content?.parts;
-    if (!parts) return "";
+    const candidate = response.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    const parts = candidate?.content?.parts;
+
+    if (!parts || parts.length === 0) {
+      const blockReason = response.promptFeedback?.blockReason;
+      console.error(
+        `[Familiar] Generate round ${round}: empty response.`,
+        `finishReason=${finishReason}, blockReason=${blockReason},`,
+        `candidates=${response.candidates?.length ?? 0}`
+      );
+      if (blockReason) {
+        throw new Error(`Request blocked by Gemini safety filter: ${blockReason}`);
+      }
+      if (finishReason && finishReason !== "STOP") {
+        throw new Error(`Generation stopped: ${finishReason}`);
+      }
+      throw new Error("Empty response from model — no content returned");
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const functionCalls = parts.filter((p: any) => p.functionCall);
@@ -317,7 +341,15 @@ export async function generateWithTools(
     if (functionCalls.length === 0) {
       // No tool calls — collect and return text
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return parts.map((p: any) => p.text || "").join("");
+      const text = parts.map((p: any) => p.text || "").join("");
+      if (!text) {
+        console.error(
+          `[Familiar] Generate round ${round}: parts present but no text content.`,
+          `finishReason=${finishReason}, partCount=${parts.length}`
+        );
+        throw new Error("Model returned empty text");
+      }
+      return text;
     }
 
     console.log(
@@ -341,5 +373,6 @@ export async function generateWithTools(
     currentContents.push({ role: "user" as const, parts: responseParts });
   }
 
-  return "";
+  console.error(`[Familiar] Exhausted ${MAX_TOOL_ROUNDS} tool rounds without a text response`);
+  throw new Error("Generation failed — too many tool call rounds without a final response");
 }

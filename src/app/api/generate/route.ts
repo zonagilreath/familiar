@@ -43,7 +43,7 @@ You MUST respond with valid JSON matching this structure. No markdown, no prose 
   "setup": {
     "location_tags": ["terrain tag", ...],
     "time_pressure": "countdown, escalation, or null",
-    "opening": "How the encounter starts"
+    "opening": "1-2 sentences of mechanical/practical setup — positions, distances, visibility, who acts first. No narration or flavor."
   },
   "payload": { ... type-specific payload ... }
 }
@@ -166,10 +166,6 @@ function buildPrompt(req: EncounterRequest): string {
     parts.push(`Pacing: ${req.pacing}`);
   }
 
-  if (req.loot_intensity) {
-    parts.push(`Loot intensity: ${req.loot_intensity}`);
-  }
-
   if (req.vibe.trim()) {
     parts.push(`\nAdditional context from the DM:\n${req.vibe.trim()}`);
   }
@@ -180,17 +176,18 @@ function buildPrompt(req: EncounterRequest): string {
     parts.push(
       `\nSpotlight instructions: The party contains these classes: ${classNames.join(", ")}.` +
       ` For the "spotlight" array, produce objects with {"class_name": "...", "hook": "..."}.` +
-      ` For each class, identify one specific skill, feature, or ability of that class that would be particularly useful or interesting in this encounter.` +
-      ` Only include a class if there is a genuine fit — do not force it. It is fine to omit a class if nothing stands out.` +
-      ` The hook should be a short, concrete sentence a DM can read aloud or use as a prompt, not a generic statement.`
+      ` For each class, identify a specific class feature, skill, or ability that has a concrete application in this encounter.` +
+      ` Only include a class if there is a genuine fit — do not force it. Omit classes where nothing stands out.` +
+      ` Write hooks as terse third-person DM notes, e.g. "Channel Divinity can break the ghoul paralysis on downed allies" or "Sneak Attack applies every round thanks to the dim light and flanking angles".` +
+      ` Never address the player, never use second person, never explain how the class works. The DM already knows. Just flag the specific tactical opportunity.`
     );
   } else {
     parts.push(
       `\nSpotlight instructions: No specific party classes were provided.` +
       ` For the "spotlight" array, produce 2-3 objects with {"role": "...", "hook": "..."}.` +
-      ` Use generic roles like "martial", "caster", "healer", "skill monkey", "tank", etc.` +
-      ` For each role, identify one aspect of this encounter where that role would shine.` +
-      ` Only include roles with a genuine fit.`
+      ` Use generic roles like "martial", "caster", "healer", "skill monkey", etc.` +
+      ` Write hooks as terse third-person DM notes flagging a specific tactical opportunity for that role in this encounter.` +
+      ` Never address the player, never use second person. Only include roles with a genuine fit.`
     );
   }
 
@@ -253,13 +250,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // Strip markdown code fences if the model included them
+    // Strip markdown code fences if the model wrapped them
     const cleaned = text
       .replace(/^```(?:json)?\s*\n?/i, "")
       .replace(/\n?```\s*$/i, "")
       .trim();
 
-    const encounter = JSON.parse(cleaned);
+    let encounter;
+    try {
+      encounter = JSON.parse(cleaned);
+    } catch {
+      // Trailing commas are the most common Gemini quirk
+      const patched = cleaned.replace(/,\s*([}\]])/g, "$1");
+      try {
+        encounter = JSON.parse(patched);
+        console.warn("[Familiar] JSON required trailing-comma fix");
+      } catch (e2) {
+        console.error(
+          "[Familiar] JSON parse failed. First 500 chars:",
+          cleaned.slice(0, 500)
+        );
+        throw e2;
+      }
+    }
 
     return Response.json(encounter);
   } catch (err) {
