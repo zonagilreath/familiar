@@ -298,7 +298,7 @@ export async function POST(request: Request) {
   // --- Build generation parameters ---
 
   const prompt = buildPrompt(body);
-  const schema = getEncounterSchema(body.encounter_type);
+  const schema = getEncounterSchema(body.encounter_type) as SchemaNode;
   const thinkingBudget = getThinkingBudget(body.variety ?? 0);
 
   // --- SSE stream: progress events during tool calls, encounter on completion ---
@@ -318,7 +318,6 @@ export async function POST(request: Request) {
           SYSTEM_PROMPT,
           [{ role: "user", parts: [{ text: prompt }] }],
           {
-            responseJsonSchema: schema,
             thinkingBudget,
             onProgress: (toolNames, round) => {
               send({ type: "progress", tools: toolNames, round });
@@ -332,11 +331,10 @@ export async function POST(request: Request) {
           return;
         }
 
-        // With structured output the response should already be valid JSON,
-        // but keep the fallback cleanup for safety.
-        let encounter;
+        // Parse model output — apply cleanup for common Gemini quirks.
+        let raw;
         try {
-          encounter = JSON.parse(text);
+          raw = JSON.parse(text);
         } catch {
           const cleaned = text
             .replace(/^```(?:json)?\s*\n?/i, "")
@@ -344,9 +342,9 @@ export async function POST(request: Request) {
             .trim();
           const patched = cleaned.replace(/,\s*([}\]])/g, "$1");
           try {
-            encounter = JSON.parse(patched);
-            console.warn("[Familiar] JSON required cleanup despite structured output");
-          } catch (e2) {
+            raw = JSON.parse(patched);
+            console.warn("[Familiar] JSON required trailing-comma fix");
+          } catch {
             console.error(
               "[Familiar] JSON parse failed. First 500 chars:",
               cleaned.slice(0, 500),
@@ -360,10 +358,14 @@ export async function POST(request: Request) {
           }
         }
 
-        // Normalise time_pressure: structured output returns a string; convert
-        // sentinel values back to null so the frontend type is satisfied.
+        // Sanitize: strip any fields not in our schema so the API only
+        // returns encounter-shaped data (defence-in-depth since we can't
+        // use Gemini's structured output mode alongside function calling).
+        const encounter = sanitize(raw, schema);
+
+        // Normalise time_pressure sentinel values to null.
         if (encounter.setup?.time_pressure) {
-          const tp = encounter.setup.time_pressure.toLowerCase().trim();
+          const tp = String(encounter.setup.time_pressure).toLowerCase().trim();
           if (tp === "none" || tp === "null" || tp === "") {
             encounter.setup.time_pressure = null;
           }
@@ -388,4 +390,48 @@ export async function POST(request: Request) {
       Connection: "keep-alive",
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Server-side sanitizer — allowlists fields to match the encounter schema
+// ---------------------------------------------------------------------------
+
+/** Minimal JSON-Schema-like node used by the sanitizer. */
+interface SchemaNode {
+  type?: string;
+  properties?: Record<string, SchemaNode>;
+  items?: SchemaNode;
+  // other fields from the schema are ignored by the sanitizer
+}
+
+/**
+ * Recursively strips any keys from `data` that aren't declared in `schema`.
+ * Primitives and arrays are passed through; objects are filtered to only
+ * include properties present in the schema's `properties` map.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitize(data: any, schema: SchemaNode): any {
+  if (data == null) return data;
+
+  if (schema.type === "array" && Array.isArray(data)) {
+    if (schema.items) {
+      return data.map((item: unknown) => sanitize(item, schema.items!));
+    }
+    return data;
+  }
+
+  if (schema.type === "object" && typeof data === "object" && !Array.isArray(data)) {
+    if (!schema.properties) return data; // loose object — no filtering
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const out: Record<string, any> = {};
+    for (const [key, childSchema] of Object.entries(schema.properties)) {
+      if (key in data) {
+        out[key] = sanitize(data[key], childSchema);
+      }
+    }
+    return out;
+  }
+
+  // Primitive (string, number, boolean) — return as-is
+  return data;
 }

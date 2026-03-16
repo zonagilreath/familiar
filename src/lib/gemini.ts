@@ -279,8 +279,6 @@ setInterval(() => {
 // --- Tool-call loop (non-streaming, returns final text) ---
 
 export interface GenerateOptions {
-  /** Gemini `responseJsonSchema` — constrains text output to this shape. */
-  responseJsonSchema?: object;
   /**
    * Thinking token budget.  Lower values speed up simple requests.
    * -1 = automatic (model default), 0 = disabled.
@@ -301,12 +299,6 @@ export async function generateWithTools(
   const baseConfig: Record<string, unknown> = {
     maxOutputTokens: 16384,
   };
-
-  // --- Structured output ---
-  if (options?.responseJsonSchema) {
-    baseConfig.responseMimeType = "application/json";
-    baseConfig.responseJsonSchema = options.responseJsonSchema;
-  }
 
   // --- Thinking budget ---
   if (options?.thinkingBudget !== undefined) {
