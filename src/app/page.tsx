@@ -59,6 +59,61 @@ function randomLoadingPhrase(): string {
   return `${verb} ${noun}`;
 }
 
+// ---------------------------------------------------------------------------
+// SSE stream reader — parses progress events and returns the final encounter
+// ---------------------------------------------------------------------------
+
+const TOOL_PHRASES: Record<string, string> = {
+  searchCreatures: "Searching the bestiary",
+  getCreature: "Reading a stat block",
+  searchSpells: "Browsing the spellbook",
+  getSpell: "Studying a spell",
+};
+
+function toolPhrase(tools: string[]): string {
+  // Pick the most "interesting" tool name for the loading phrase
+  for (const t of tools) {
+    if (TOOL_PHRASES[t]) return TOOL_PHRASES[t];
+  }
+  return "Consulting ancient tomes";
+}
+
+async function readGenerateStream(
+  res: Response,
+  onProgress: (phrase: string) => void,
+): Promise<Encounter> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete SSE events (delimited by double newline)
+    while (buffer.includes("\n\n")) {
+      const idx = buffer.indexOf("\n\n");
+      const raw = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+
+      if (!raw.startsWith("data: ")) continue;
+      const payload = JSON.parse(raw.slice(6));
+
+      if (payload.type === "progress") {
+        onProgress(toolPhrase(payload.tools));
+      } else if (payload.type === "encounter") {
+        return payload.data as Encounter;
+      } else if (payload.type === "error") {
+        throw new Error(payload.message);
+      }
+    }
+  }
+
+  throw new Error("Stream ended without returning an encounter");
+}
+
 type View = "form" | "loading" | "retrying" | "success" | "error" | "sheet" | "demo";
 
 export default function Home() {
@@ -106,12 +161,14 @@ export default function Home() {
           body: JSON.stringify({ ...req, variety: v }),
         });
 
+        // Non-SSE error responses (validation, rate-limit, etc.)
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error || `Request failed (${res.status})`);
         }
 
-        const data: Encounter = await res.json();
+        // Read SSE stream for progress events + final encounter
+        const data = await readGenerateStream(res, setLoadingPhrase);
         setEncounter(data);
 
         // Brief success screen before showing the sheet

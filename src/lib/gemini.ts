@@ -278,16 +278,40 @@ setInterval(() => {
 
 // --- Tool-call loop (non-streaming, returns final text) ---
 
+export interface GenerateOptions {
+  /** Gemini `responseJsonSchema` — constrains text output to this shape. */
+  responseJsonSchema?: object;
+  /**
+   * Thinking token budget.  Lower values speed up simple requests.
+   * -1 = automatic (model default), 0 = disabled.
+   */
+  thinkingBudget?: number;
+  /** Called on each tool-call round so callers can stream progress. */
+  onProgress?: (toolNames: string[], round: number) => void;
+}
+
 export async function generateWithTools(
   systemPrompt: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contents: any[]
+  contents: any[],
+  options?: GenerateOptions,
 ): Promise<string> {
   const cacheName = await getOrCreateCache(systemPrompt);
 
   const baseConfig: Record<string, unknown> = {
     maxOutputTokens: 16384,
   };
+
+  // --- Structured output ---
+  if (options?.responseJsonSchema) {
+    baseConfig.responseMimeType = "application/json";
+    baseConfig.responseJsonSchema = options.responseJsonSchema;
+  }
+
+  // --- Thinking budget ---
+  if (options?.thinkingBudget !== undefined) {
+    baseConfig.thinkingConfig = { thinkingBudget: options.thinkingBudget };
+  }
 
   if (cacheName) {
     baseConfig.cachedContent = cacheName;
@@ -351,6 +375,11 @@ export async function generateWithTools(
       }
       return text;
     }
+
+    // Notify caller about which tools are being called
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolNames = functionCalls.map((fc: any) => fc.functionCall.name as string);
+    options?.onProgress?.(toolNames, round);
 
     console.log(
       `[Familiar] Generate round ${round}: executing ${functionCalls.length} tool call(s):`,

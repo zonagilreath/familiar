@@ -1,4 +1,5 @@
 import { generateWithTools, isRateLimited, srdContent } from "@/lib/gemini";
+import { getEncounterSchema } from "@/lib/encounter-schema";
 import type { EncounterRequest } from "@/types/encounter";
 
 const DIFFICULTY_LABELS: Record<number, string> = {
@@ -23,6 +24,8 @@ You have the D&D 5e 2024 SRD core rules and encounter design guides in your cont
 
 When building encounters involving combat, search for creatures, then pull full stat blocks for the ones you select. Use XP budgets from the rules to balance.
 
+**Tool-use efficiency:** When you need multiple creature stat blocks or spell descriptions, request ALL of them in a single response rather than one at a time. Batch your tool calls — for example, call getCreature for every creature you plan to use in a single round instead of one per round.
+
 <srd_reference>
 ${srdContent}
 </srd_reference>
@@ -42,7 +45,7 @@ You MUST respond with valid JSON matching this structure. No markdown, no prose 
   "spotlight": [SEE SPOTLIGHT INSTRUCTIONS IN THE USER PROMPT],
   "setup": {
     "location_tags": ["terrain tag", ...],
-    "time_pressure": "countdown, escalation, or null",
+    "time_pressure": "countdown, escalation, or 'none' if there is no time pressure",
     "opening": "1-2 sentences of mechanical/practical setup — positions, distances, visibility, who acts first. No narration or flavor."
   },
   "payload": { ... type-specific payload ... }
@@ -169,6 +172,18 @@ function getVarietyInstruction(variety: number): string {
   return "\nCreative variety instructions:\n" + tiers.join("\n");
 }
 
+/**
+ * Map variety level to a thinking token budget.
+ * Lower variety → less thinking → faster response.
+ * -1 = automatic (model default).
+ */
+function getThinkingBudget(variety: number): number {
+  if (variety <= 0) return 1024;
+  if (variety <= 1) return 2048;
+  if (variety <= 2) return 4096;
+  return -1; // automatic for high-creativity requests
+}
+
 function buildPrompt(req: EncounterRequest): string {
   const parts: string[] = [];
 
@@ -237,89 +252,140 @@ function buildPrompt(req: EncounterRequest): string {
 }
 
 export async function POST(request: Request) {
-  try {
-    // Origin check
-    const origin = request.headers.get("origin");
-    const referer = request.headers.get("referer");
-    if (process.env.NODE_ENV === "production") {
-      const allowedOrigin = process.env.ALLOWED_ORIGIN;
-      if (allowedOrigin && origin && origin !== allowedOrigin) {
-        return Response.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
-    const isDev = process.env.NODE_ENV !== "production";
-    if (!isDev && !origin && !referer) {
+  // --- Validation (returns normal JSON errors before streaming) ---
+
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  if (process.env.NODE_ENV === "production") {
+    const allowedOrigin = process.env.ALLOWED_ORIGIN;
+    if (allowedOrigin && origin && origin !== allowedOrigin) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
-
-    // Rate limiting
-    const forwarded = request.headers.get("x-forwarded-for");
-    const ip = forwarded?.split(",")[0]?.trim() || "unknown";
-    if (isRateLimited(ip)) {
-      return Response.json(
-        { error: "Too many requests. Please wait a moment." },
-        { status: 429 }
-      );
-    }
-
-    const body = (await request.json()) as EncounterRequest;
-
-    // Clamp variety to [0, 5]
-    body.variety = Math.max(0, Math.min(5, Math.floor(body.variety ?? 0)));
-
-    // Basic validation
-    if (
-      typeof body.party_size !== "number" ||
-      typeof body.average_level !== "number"
-    ) {
-      return Response.json(
-        { error: "party_size and average_level are required numbers" },
-        { status: 400 }
-      );
-    }
-
-    const prompt = buildPrompt(body);
-
-    const text = await generateWithTools(SYSTEM_PROMPT, [
-      { role: "user", parts: [{ text: prompt }] },
-    ]);
-
-    if (!text) {
-      return Response.json(
-        { error: "Empty response from model" },
-        { status: 502 }
-      );
-    }
-
-    // Strip markdown code fences if the model wrapped them
-    const cleaned = text
-      .replace(/^```(?:json)?\s*\n?/i, "")
-      .replace(/\n?```\s*$/i, "")
-      .trim();
-
-    let encounter;
-    try {
-      encounter = JSON.parse(cleaned);
-    } catch {
-      // Trailing commas are the most common Gemini quirk
-      const patched = cleaned.replace(/,\s*([}\]])/g, "$1");
-      try {
-        encounter = JSON.parse(patched);
-        console.warn("[Familiar] JSON required trailing-comma fix");
-      } catch (e2) {
-        console.error(
-          "[Familiar] JSON parse failed. First 500 chars:",
-          cleaned.slice(0, 500)
-        );
-        throw e2;
-      }
-    }
-
-    return Response.json(encounter);
-  } catch (err) {
-    console.error("[Familiar] Generate error:", err);
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    return Response.json({ error: message }, { status: 500 });
   }
+  const isDev = process.env.NODE_ENV !== "production";
+  if (!isDev && !origin && !referer) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "unknown";
+  if (isRateLimited(ip)) {
+    return Response.json(
+      { error: "Too many requests. Please wait a moment." },
+      { status: 429 },
+    );
+  }
+
+  let body: EncounterRequest;
+  try {
+    body = (await request.json()) as EncounterRequest;
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  body.variety = Math.max(0, Math.min(5, Math.floor(body.variety ?? 0)));
+
+  if (
+    typeof body.party_size !== "number" ||
+    typeof body.average_level !== "number"
+  ) {
+    return Response.json(
+      { error: "party_size and average_level are required numbers" },
+      { status: 400 },
+    );
+  }
+
+  // --- Build generation parameters ---
+
+  const prompt = buildPrompt(body);
+  const schema = getEncounterSchema(body.encounter_type);
+  const thinkingBudget = getThinkingBudget(body.variety ?? 0);
+
+  // --- SSE stream: progress events during tool calls, encounter on completion ---
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
+      };
+
+      try {
+        const text = await generateWithTools(
+          SYSTEM_PROMPT,
+          [{ role: "user", parts: [{ text: prompt }] }],
+          {
+            responseJsonSchema: schema,
+            thinkingBudget,
+            onProgress: (toolNames, round) => {
+              send({ type: "progress", tools: toolNames, round });
+            },
+          },
+        );
+
+        if (!text) {
+          send({ type: "error", message: "Empty response from model" });
+          controller.close();
+          return;
+        }
+
+        // With structured output the response should already be valid JSON,
+        // but keep the fallback cleanup for safety.
+        let encounter;
+        try {
+          encounter = JSON.parse(text);
+        } catch {
+          const cleaned = text
+            .replace(/^```(?:json)?\s*\n?/i, "")
+            .replace(/\n?```\s*$/i, "")
+            .trim();
+          const patched = cleaned.replace(/,\s*([}\]])/g, "$1");
+          try {
+            encounter = JSON.parse(patched);
+            console.warn("[Familiar] JSON required cleanup despite structured output");
+          } catch (e2) {
+            console.error(
+              "[Familiar] JSON parse failed. First 500 chars:",
+              cleaned.slice(0, 500),
+            );
+            send({
+              type: "error",
+              message: "Failed to parse encounter data from model",
+            });
+            controller.close();
+            return;
+          }
+        }
+
+        // Normalise time_pressure: structured output returns a string; convert
+        // sentinel values back to null so the frontend type is satisfied.
+        if (encounter.setup?.time_pressure) {
+          const tp = encounter.setup.time_pressure.toLowerCase().trim();
+          if (tp === "none" || tp === "null" || tp === "") {
+            encounter.setup.time_pressure = null;
+          }
+        }
+
+        send({ type: "encounter", data: encounter });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Internal server error";
+        console.error("[Familiar] Generate error:", err);
+        send({ type: "error", message });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
