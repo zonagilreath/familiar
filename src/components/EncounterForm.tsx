@@ -47,19 +47,21 @@ const DIFFICULTY_LABELS = ["Trivial", "Easy", "Medium", "Hard", "Deadly"];
 
 interface EncounterFormProps {
   onGenerate: (req: EncounterRequest) => void;
+  initialValues?: EncounterRequest | null;
 }
 
 export default function EncounterForm({
   onGenerate,
+  initialValues,
 }: EncounterFormProps) {
-  const [encounterType, setEncounterType] = useState<EncounterKind | undefined>();
-  const [partySize, setPartySize] = useState(4);
-  const [averageLevel, setAverageLevel] = useState(5);
-  const [difficulty, setDifficulty] = useState(3);
-  const [environment, setEnvironment] = useState("");
-  const [party, setParty] = useState<PartyMember[]>([]);
-  const [vibe, setVibe] = useState("");
-  const [pacing, setPacing] = useState<"quick" | "standard" | "epic">("standard");
+  const [encounterType, setEncounterType] = useState<EncounterKind | undefined>(initialValues?.encounter_type);
+  const [partySize, setPartySize] = useState(initialValues?.party_size ?? 4);
+  const [averageLevel, setAverageLevel] = useState(initialValues?.average_level ?? 5);
+  const [difficulty, setDifficulty] = useState(initialValues?.difficulty ?? 3);
+  const [environment, setEnvironment] = useState(initialValues?.environment ?? "");
+  const [party, setParty] = useState<PartyMember[]>(initialValues?.party_composition ?? []);
+  const [vibe, setVibe] = useState(initialValues?.vibe ?? "");
+  const [pacing, setPacing] = useState<"quick" | "standard" | "epic">(initialValues?.pacing ?? "standard");
   const [showClassPicker, setShowClassPicker] = useState(false);
 
   function addClass(className: string) {

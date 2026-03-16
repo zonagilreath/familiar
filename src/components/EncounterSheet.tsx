@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import type { Encounter, SpotlightEntry } from "@/types/encounter";
+import { encounterToMarkdown } from "@/lib/encounter-to-markdown";
 
 interface EncounterSheetProps {
   encounter: Encounter;
@@ -619,6 +621,16 @@ function TypePayload({ encounter }: { encounter: Encounter }) {
   }
 }
 
+function downloadFile(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function EncounterSheet({
   encounter,
   variety,
@@ -626,6 +638,23 @@ export default function EncounterSheet({
   onRegenerate,
   onWeirder,
 }: EncounterSheetProps) {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!showExportMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showExportMenu]);
+
+  const fileBase = encounter.title?.replace(/\s+/g, "_") || "encounter";
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -783,26 +812,44 @@ export default function EncounterSheet({
               </div>
             )}
             <div className="h-8 w-px bg-white/10 mx-1" />
-            <button
-              onClick={() => {
-                const blob = new Blob(
-                  [JSON.stringify(encounter, null, 2)],
-                  { type: "application/json" }
-                );
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${encounter.title?.replace(/\s+/g, "_") || "encounter"}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all uppercase tracking-wider text-sm"
-            >
-              <span className="material-symbols-outlined text-xl">
-                download
-              </span>
-              <span className="hidden md:inline">Export</span>
-            </button>
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all uppercase tracking-wider text-sm"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  download
+                </span>
+                <span className="hidden md:inline">Export</span>
+                <span className="material-symbols-outlined text-sm">
+                  expand_more
+                </span>
+              </button>
+              {showExportMenu && (
+                <div className="absolute bottom-full right-0 mb-2 bg-card-dark border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[160px]">
+                  <button
+                    onClick={() => {
+                      downloadFile(encounterToMarkdown(encounter), `${fileBase}.md`, "text/markdown");
+                      setShowExportMenu(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-slate-200 hover:bg-white/10 transition-colors text-left"
+                  >
+                    <span className="material-symbols-outlined text-lg">description</span>
+                    Markdown
+                  </button>
+                  <button
+                    onClick={() => {
+                      downloadFile(JSON.stringify(encounter, null, 2), `${fileBase}.json`, "application/json");
+                      setShowExportMenu(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-slate-200 hover:bg-white/10 transition-colors text-left"
+                  >
+                    <span className="material-symbols-outlined text-lg">data_object</span>
+                    JSON
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </footer>

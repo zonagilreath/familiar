@@ -194,7 +194,7 @@ export default function Home() {
               Demo
             </button>
           </header>
-          <EncounterForm onGenerate={generate} />
+          <EncounterForm onGenerate={generate} initialValues={lastRequest} />
         </>
       )}
 
