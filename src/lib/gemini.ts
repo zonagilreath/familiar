@@ -14,7 +14,7 @@ export const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
-export const MODEL = "gemini-2.5-flash";
+export const MODEL = "gemini-3-flash-preview";
 
 // --- SRD Loading ---
 
