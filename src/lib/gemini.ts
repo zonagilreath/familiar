@@ -18,7 +18,15 @@ export const MODEL = "gemini-3-flash-preview";
 
 // --- SRD Loading ---
 
-const TOOL_BACKED_FILES = new Set(["Spells.md", "MonstersA-Z.md", "Animals.md"]);
+const TOOL_BACKED_FILES = new Set([
+  "Spells.md",
+  "MonstersA-Z.md",
+  "Animals.md",
+  "MagicItems.md",
+  "RulesGlossary.md",
+  "CharacterCreation.md",
+  "Equipment.md",
+]);
 
 function loadSrdContent(): string {
   const srdDir = join(process.cwd(), "srd");
